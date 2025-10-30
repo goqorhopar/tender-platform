@@ -1,0 +1,65 @@
+version: '3.8'
+
+# Development override - extends the base docker-compose.yml
+# Use with: docker-compose -f docker-compose.yml -f docker-compose.override.yml up
+
+services:
+  # Override backend for development
+  backend:
+    environment:
+      - ENVIRONMENT=development
+      - DEBUG=true
+      - LOG_LEVEL=debug
+    volumes:
+      - ./backend:/app
+      - backend_logs:/app/logs
+      - uploads:/app/app/uploads
+      - backups:/app/backups
+    ports:
+      - "8000:8000"
+    command: >
+      sh -c "pip install -e . &&
+             python -c 'from app.database import init_db; init_db()' &&
+             uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+
+  # Override celery worker for development
+  celery_worker:
+    volumes:
+      - ./backend:/app
+      - backend_logs:/app/logs
+    environment:
+      - ENVIRONMENT=development
+      - DEBUG=true
+    command: >
+      sh -c "pip install -e . &&
+             celery -A app.tasks.celery_app worker --loglevel=debug --pool=solo"
+
+  # Override celery beat for development
+  celery_beat:
+    volumes:
+      - ./backend:/app
+      - backend_logs:/app/logs
+      - celery_beat_data:/app/celerybeat-schedule
+    environment:
+      - ENVIRONMENT=development
+      - DEBUG=true
+    command: >
+      sh -c "pip install -e . &&
+             celery -A app.tasks.celery_app beat --loglevel=debug --scheduler=celery.beat:PersistentScheduler"
+
+  # Override telegram bot for development
+  telegram_bot:
+    volumes:
+      - ./telegram-bot:/app
+    environment:
+      - ENVIRONMENT=development
+      - DEBUG=true
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - BACKEND_API_URL=http://backend:8000
+      - API_V1_PREFIX=/api/v1
+
+volumes:
+  backend_logs:
+  celery_beat_data:
+  uploads:
+  backups:
