@@ -31,10 +31,81 @@ from app.schemas.auth import (
     PasswordResetConfirm,
 )
 from app.core.logging_config import get_logger, log_audit_event
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 
 router = APIRouter()
 logger = get_logger(__name__)
+
+
+# ============================================================================
+# CUSTOM OAUTH2 BEARER SCHEME
+# ============================================================================
+class OAuth2Bearer(HTTPBearer):
+    async def __call__(self, request: Request) -> str:
+        credentials: HTTPAuthorizationCredentials = await super().__call__(request)
+        return credentials.credentials
+
+
+# ============================================================================
+# DEPENDENCIES FOR AUTHENTICATION
+# ============================================================================
+async def get_current_user(
+    request: Request,
+    db: Session = Depends(get_db),
+    token: str = Depends(OAuth2Bearer()),
+) -> User:
+    """
+    Get current authenticated user from JWT token.
+    """
+    payload = verify_access_token(token)
+    
+    if not payload:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    user_id = payload.get("sub")
+    user = db.query(User).filter(User.id == user_id).first()
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    return user
+
+
+async def get_current_active_user(
+    current_user: User = Depends(get_current_user),
+) -> User:
+    """
+    Get current active user.
+    """
+    if not current_user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Inactive user",
+        )
+    return current_user
+
+
+async def get_current_superuser(
+    current_user: User = Depends(get_current_active_user),
+) -> User:
+    """
+    Get current superuser.
+    """
+    if not current_user.is_superuser:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="The user doesn't have enough privileges",
+        )
+    return current_user
 
 
 # ============================================================================
@@ -205,6 +276,37 @@ async def register_user(
 
 
 # ============================================================================
+# DEPENDENCIES FOR AUTHENTICATION
+# ============================================================================
+async def get_current_active_user(
+    current_user: User = Depends(get_current_user),
+) -> User:
+    """
+    Get current active user.
+    """
+    if not current_user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Inactive user",
+        )
+    return current_user
+
+
+async def get_current_superuser(
+    current_user: User = Depends(get_current_active_user),
+) -> User:
+    """
+    Get current superuser.
+    """
+    if not current_user.is_superuser:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="The user doesn't have enough privileges",
+        )
+    return current_user
+
+
+# ============================================================================
 # PASSWORD MANAGEMENT
 # ============================================================================
 @router.post("/password/change")
@@ -305,73 +407,3 @@ async def confirm_password_reset(
     logger.info(f"Password reset completed for: {user.email}")
     
     return {"message": "Password has been reset successfully"}
-
-
-# ============================================================================
-# DEPENDENCIES
-# ============================================================================
-async def get_current_user(
-    request: Request,
-    db: Session = Depends(get_db),
-    token: str = Depends(OAuth2Bearer()),
-) -> User:
-    """
-    Get current authenticated user from JWT token.
-    """
-    payload = verify_access_token(token)
-    
-    if not payload:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    
-    user_id = payload.get("sub")
-    user = db.query(User).filter(User.id == user_id).first()
-    
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    
-    return user
-
-
-async def get_current_active_user(
-    current_user: User = Depends(get_current_user),
-) -> User:
-    """
-    Get current active user.
-    """
-    if not current_user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Inactive user",
-        )
-    return current_user
-
-
-async def get_current_superuser(
-    current_user: User = Depends(get_current_active_user),
-) -> User:
-    """
-    Get current superuser.
-    """
-    if not current_user.is_superuser:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="The user doesn't have enough privileges",
-        )
-    return current_user
-
-
-# Custom OAuth2 Bearer scheme
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-
-class OAuth2Bearer(HTTPBearer):
-    async def __call__(self, request: Request) -> str:
-        credentials: HTTPAuthorizationCredentials = await super().__call__(request)
-        return credentials.credentials

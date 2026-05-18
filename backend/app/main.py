@@ -9,7 +9,7 @@ from typing import AsyncGenerator
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from slowapi import SlowAPI, _rate_limit_exceeded_handler
+from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from prometheus_fastapi_instrumentator import Instrumentator
 import uuid
@@ -97,8 +97,7 @@ def create_application() -> FastAPI:
         return response
     
     # Setup rate limiter
-    rate_limiter = SlowAPI()
-    rate_limiter.key_func = get_remote_address
+    rate_limiter = Limiter(key_func=get_remote_address)
     application.state.limiter = rate_limiter
     application.add_exception_handler(429, _rate_limit_exceeded_handler)
     
