@@ -19,16 +19,6 @@ async_engine = create_async_engine(
     pool_recycle=3600,
 )
 
-# Sync engine for migrations and sync operations
-sync_engine = create_async_engine(
-    settings.DATABASE_URL.replace("postgresql+asyncpg", "postgresql"),
-    echo=settings.DEBUG,
-    pool_pre_ping=True,
-    pool_size=10,
-    max_overflow=20,
-    pool_recycle=3600,
-)
-
 # Base class for models
 Base = declarative_base()
 
@@ -36,15 +26,6 @@ Base = declarative_base()
 AsyncSessionLocal = async_sessionmaker(
     bind=async_engine,
     class_=AsyncSession,
-    expire_on_commit=False,
-    autocommit=False,
-    autoflush=False,
-)
-
-# Session factory for sync sessions
-SessionLocal = sessionmaker(
-    bind=sync_engine,
-    class_=Session,
     expire_on_commit=False,
     autocommit=False,
     autoflush=False,
@@ -64,19 +45,6 @@ async def get_db() -> AsyncSession:
             await session.close()
 
 
-def get_sync_db() -> Session:
-    """Dependency for getting sync database session."""
-    db = SessionLocal()
-    try:
-        yield db
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    finally:
-        db.close()
-
-
 async def init_db() -> None:
     """Initialize database tables."""
     try:
@@ -93,5 +61,4 @@ async def init_db() -> None:
 async def close_db() -> None:
     """Close database connections."""
     await async_engine.dispose()
-    await sync_engine.dispose()
     logger.info("Database connections closed")
