@@ -8,13 +8,36 @@ from datetime import datetime
 from typing import Optional, List
 from sqlalchemy import (
     Boolean, Column, DateTime, Enum, Float, ForeignKey, Index,
-    Integer, String, Text, UniqueConstraint, func
+    Integer, String, Text, UniqueConstraint, func, JSON, String as SQLString
 )
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy.dialects.postgresql import UUID as PGUUID, JSONB
 from sqlalchemy.orm import relationship
 from enum import Enum as PyEnum
+import os
 
 from app.db.database import Base
+
+# Определяем тип JSON в зависимости от базы данных
+# Для SQLite используем JSON, для PostgreSQL - JSONB
+def get_json_type():
+    """Возвращает подходящий JSON тип для текущей БД."""
+    db_url = os.getenv("DATABASE_URL", "")
+    if "postgresql" in db_url.lower():
+        return JSONB
+    return JSON
+
+JSONType = get_json_type()
+
+# Определяем тип UUID в зависимости от базы данных
+# Для SQLite используем String(36), для PostgreSQL - UUID
+def get_uuid_type():
+    """Возвращает подходящий UUID тип для текущей БД."""
+    db_url = os.getenv("DATABASE_URL", "")
+    if "postgresql" in db_url.lower():
+        return PGUUID(as_uuid=True)
+    return SQLString(36)
+
+UUIDType = get_uuid_type()
 
 
 # ============================================================================
@@ -79,9 +102,9 @@ class SoftDeleteMixin:
 class UUIDPrimaryKeyMixin:
     """Mixin for UUID primary key."""
     id = Column(
-        UUID(as_uuid=True),
+        UUIDType,
         primary_key=True,
-        default=uuid.uuid4,
+        default=lambda: str(uuid.uuid4()),
         index=True
     )
 
@@ -115,7 +138,7 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin, Base):
     )
     
     # Preferences
-    preferences = Column(JSONB, default=dict)
+    preferences = Column(JSONType, default=dict)
     
     # Last login
     last_login_at = Column(DateTime(timezone=True), nullable=True)
@@ -152,7 +175,7 @@ class Tender(UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin, Base):
     type = Column(Enum(TenderType), default=TenderType.COMMERCIAL, nullable=False)
     status = Column(Enum(TenderStatus), default=TenderStatus.DRAFT, nullable=False, index=True)
     category = Column(String(100), nullable=True, index=True)
-    okpd2_codes = Column(JSONB, default=list)  # Russian product classification
+    okpd2_codes = Column(JSONType, default=list)  # Russian product classification
     
     # Pricing
     initial_price = Column(Float, nullable=False)
@@ -175,11 +198,11 @@ class Tender(UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin, Base):
     # AI Analysis
     ai_summary = Column(Text, nullable=True)
     ai_risk_score = Column(Float, nullable=True)  # 0-100
-    ai_recommendations = Column(JSONB, default=list)
+    ai_recommendations = Column(JSONType, default=list)
     
     # Relationships
-    creator_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
-    assigned_to_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    creator_id = Column(UUIDType, ForeignKey("users.id"), nullable=False)
+    assigned_to_id = Column(UUIDType, ForeignKey("users.id"), nullable=True)
     
     creator = relationship("User", foreign_keys=[creator_id], back_populates="tenders_created")
     assigned_to = relationship("User", foreign_keys=[assigned_to_id], back_populates="tenders_assigned")
@@ -207,7 +230,7 @@ class TenderDocument(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     
     __tablename__ = "tender_documents"
     
-    tender_id = Column(UUID(as_uuid=True), ForeignKey("tenders.id"), nullable=False)
+    tender_id = Column(UUIDType, ForeignKey("tenders.id"), nullable=False)
     
     # Document Info
     name = Column(String(255), nullable=False)
@@ -221,7 +244,7 @@ class TenderDocument(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     s3_key = Column(String(500), nullable=True)
     
     # Metadata
-    uploaded_by_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    uploaded_by_id = Column(UUIDType, ForeignKey("users.id"), nullable=False)
     checksum = Column(String(64), nullable=True)  # SHA-256 hash
     
     # Relationships
@@ -242,9 +265,9 @@ class TenderComment(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     
     __tablename__ = "tender_comments"
     
-    tender_id = Column(UUID(as_uuid=True), ForeignKey("tenders.id"), nullable=False)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
-    parent_id = Column(UUID(as_uuid=True), ForeignKey("tender_comments.id"), nullable=True)
+    tender_id = Column(UUIDType, ForeignKey("tenders.id"), nullable=False)
+    user_id = Column(UUIDType, ForeignKey("users.id"), nullable=False)
+    parent_id = Column(UUIDType, ForeignKey("tender_comments.id"), nullable=True)
     
     content = Column(Text, nullable=False)
     is_edited = Column(Boolean, default=False, nullable=False)
@@ -268,8 +291,8 @@ class FavoriteTender(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     
     __tablename__ = "favorite_tenders"
     
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
-    tender_id = Column(UUID(as_uuid=True), ForeignKey("tenders.id"), nullable=False)
+    user_id = Column(UUIDType, ForeignKey("users.id"), nullable=False)
+    tender_id = Column(UUIDType, ForeignKey("tenders.id"), nullable=False)
     notes = Column(Text, nullable=True)
     
     # Relationships
@@ -291,12 +314,12 @@ class AuditLog(UUIDPrimaryKeyMixin, Base):
     __tablename__ = "audit_logs"
     
     timestamp = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False, index=True)
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    user_id = Column(UUIDType, ForeignKey("users.id"), nullable=True)
     action = Column(String(100), nullable=False, index=True)
     resource_type = Column(String(100), nullable=False)
-    resource_id = Column(UUID(as_uuid=True), nullable=True)
-    old_values = Column(JSONB, nullable=True)
-    new_values = Column(JSONB, nullable=True)
+    resource_id = Column(UUIDType, nullable=True)
+    old_values = Column(JSONType, nullable=True)
+    new_values = Column(JSONType, nullable=True)
     ip_address = Column(String(45), nullable=True)
     user_agent = Column(String(500), nullable=True)
     
