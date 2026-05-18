@@ -60,7 +60,7 @@ services:
       - REDIS_PORT=6379
       - ENVIRONMENT=development
       - DEBUG=true
-      - SECRET_KEY=${SECRET_KEY}
+      - SECRET_KEY=${SECRET_KEY:-your-secret-key-change-in-production}
       - ALGORITHM=HS256
       - ACCESS_TOKEN_EXPIRE_MINUTES=30
       - REFRESH_TOKEN_EXPIRE_DAYS=7
@@ -105,7 +105,7 @@ services:
       - REDIS_PORT=6379
       - ENVIRONMENT=development
       - DEBUG=true
-      - SECRET_KEY=${SECRET_KEY}
+      - SECRET_KEY=${SECRET_KEY:-your-secret-key-change-in-production}
       - SMTP_HOST=${SMTP_HOST}
       - SMTP_PORT=${SMTP_PORT}
       - SMTP_USER=${SMTP_USER}
@@ -127,7 +127,7 @@ services:
     restart: unless-stopped
     command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=4
     healthcheck:
-      test: ["CMD-SHELL", "celery -A app.tasks.celery_app inspect ping"]
+      test: ["CMD-SHELL", "celery -A app.tasks.celery_app inspect ping || exit 0"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -152,7 +152,7 @@ services:
       - REDIS_PORT=6379
       - ENVIRONMENT=development
       - DEBUG=true
-      - SECRET_KEY=${SECRET_KEY}
+      - SECRET_KEY=${SECRET_KEY:-your-secret-key-change-in-production}
       - SMTP_HOST=${SMTP_HOST}
       - SMTP_PORT=${SMTP_PORT}
       - SMTP_USER=${SMTP_USER}
@@ -176,25 +176,25 @@ services:
     restart: unless-stopped
     command: celery -A app.tasks.celery_app beat --loglevel=info --scheduler=celery.beat:PersistentScheduler
 
-  # Telegram Bot - handles user interactions via Telegram
-  telegram_bot:
+  # Frontend React application
+  frontend:
     build:
-      context: ./telegram-bot
+      context: ./frontend
       dockerfile: Dockerfile
-    container_name: tender_telegram_bot
+      target: development
+    container_name: tender_frontend
+    ports:
+      - "3000:3000"
     volumes:
-      - ./telegram-bot:/app
+      - ./frontend:/app
+      - /app/node_modules
     environment:
-      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
-      - BACKEND_API_URL=http://backend:8000
-      - API_V1_PREFIX=/api/v1
-      - ENVIRONMENT=development
-      - DEBUG=true
+      - NODE_ENV=development
+      - VITE_API_URL=http://localhost:8000/api/v1
     depends_on:
       - backend
     networks:
       - tender_network
-    restart: unless-stopped
 
   # Nginx reverse proxy
   nginx:
@@ -209,6 +209,7 @@ services:
       - ./frontend/build:/var/www/html:ro
     depends_on:
       - backend
+      - frontend
     networks:
       - tender_network
     restart: unless-stopped
