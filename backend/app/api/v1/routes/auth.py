@@ -97,7 +97,7 @@ async def get_current_user_info(current_user: User = Depends(get_current_user)):
 
 
 @router.post("/refresh", response_model=Token)
-async def refresh_token(refresh_token: str):
+async def refresh_token(refresh_data: dict):
     """
     Refresh access token using refresh token.
     
@@ -105,7 +105,14 @@ async def refresh_token(refresh_token: str):
     """
     from app.utils.security import verify_token
     
-    user_id = verify_token(refresh_token, token_type="refresh")
+    refresh_token_str = refresh_data.get("refresh_token")
+    if not refresh_token_str:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Refresh token is required",
+        )
+    
+    user_id = verify_token(refresh_token_str, token_type="refresh")
     
     if not user_id:
         raise HTTPException(

@@ -2,6 +2,7 @@
 
 from datetime import datetime, timedelta
 from typing import Optional, Any
+import uuid
 from jose import jwt, JWTError
 from passlib.context import CryptContext
 from app.core.config import settings
@@ -23,7 +24,8 @@ def get_password_hash(password: str) -> str:
 def create_access_token(
     subject: str | Any,
     expires_delta: Optional[timedelta] = None,
-    token_type: str = "access"
+    token_type: str = "access",
+    unique_jti: Optional[str] = None,
 ) -> str:
     """Create a JWT access token."""
     if expires_delta:
@@ -37,6 +39,7 @@ def create_access_token(
         "exp": expire,
         "sub": str(subject),
         "type": token_type,
+        "jti": unique_jti or str(uuid.uuid4()),  # Unique token ID to ensure different tokens
     }
     
     encoded_jwt = jwt.encode(
