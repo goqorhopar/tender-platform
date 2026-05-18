@@ -1,40 +1,32 @@
 ```
-# Python
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.Python
-env/
-venv/
-.venv/
-.ENV
-.ENV.local
-.python-version
-.pytest_cache/
-.mypy_cache/
-.coverage
-coverage/
+# Dependencies
+node_modules/
 
-# Alembic
-alembic/versions/*.py
+# Build outputs
+dist/
+build/
+target/
 
-# Logs
-*.log
+# TypeScript/JavaScript
+*.tsbuildinfo
+*.js.map
+*.jsx.map
+*.ts.map
 
-# Environment variables
+# Environment
 .env
 .env.local
-.env.*
+*.env.*
 
-# IDE
+# Editors
 .vscode/
 .idea/
 *.swp
 *.swo
-*.tmp
 
-# OS
-.DS_Store
-Thumbs.db
+# Logs
+*.log
+
+# Temporary files
+*.tmp
 ```
