@@ -108,30 +108,29 @@ def setup_structlog() -> None:
 # ============================================================================
 # CORRELATION ID
 # ============================================================================
+import contextvars as ctx_vars
+
+_correlation_id_var: ctx_vars.ContextVar[str] = ctx_vars.ContextVar("correlation_id", default="N/A")
+
+
 class CorrelationIdFilter(logging.Filter):
     """Add correlation ID to log records."""
-    
+
     def filter(self, record: logging.LogRecord) -> bool:
-        import contextvars
-        correlation_id = contextvars.copy_context().get("correlation_id", "N/A")
-        record.correlation_id = correlation_id
+        record.correlation_id = _correlation_id_var.get()
         return True
 
 
 def get_correlation_id() -> str:
     """Get current correlation ID."""
-    import contextvars
-    return contextvars.copy_context().get("correlation_id", "N/A")
+    return _correlation_id_var.get()
 
 
 def set_correlation_id(correlation_id: str) -> None:
     """Set correlation ID for the current context."""
-    import contextvars
-    ctx = contextvars.copy_context()
-    ctx.run(lambda: setattr(contextvars, "correlation_id", correlation_id))
+    _correlation_id_var.set(correlation_id)
 
 
-# ============================================================================
 # LOGGER FACTORY
 # ============================================================================
 def get_logger(name: str) -> logging.Logger:

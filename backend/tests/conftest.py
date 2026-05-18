@@ -15,18 +15,24 @@ from app.db.database import Base, get_db
 from app.core.config import settings
 
 
-# Override settings for testing
-TEST_DATABASE_URL = "sqlite:///:memory:"
+# Override settings for testing - use SQLite for unit tests
+TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 
 
 @pytest.fixture(scope="session")
 def test_engine():
     """Create test database engine."""
+    from sqlalchemy.dialects import sqlite
+    
+    # Use synchronous engine for tests with SQLite
     engine = create_engine(
-        TEST_DATABASE_URL,
+        "sqlite:///:memory:",
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
+    
+    # Create tables manually without PostgreSQL-specific types
+    from app.models import User  # Import models to register them with Base
     Base.metadata.create_all(bind=engine)
     yield engine
     Base.metadata.drop_all(bind=engine)
