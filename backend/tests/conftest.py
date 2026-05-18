@@ -1,41 +1,84 @@
 """
 Pytest configuration and fixtures for Tender Platform tests.
+All tests use SQLite for fast, isolated execution without external dependencies.
 """
 
 import os
 import pytest
 from typing import Generator, Any
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import StaticPool
 
-from app.main import app
+# ============================================================================
+# CRITICAL: Set environment variables BEFORE ANY app imports
+# This must happen at the very top of this file
+# ============================================================================
+
+# Always use SQLite for tests - fast and isolated
+TEST_DATABASE_URL = "sqlite:///:memory:"
+TEST_ASYNC_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
+
+# Set environment variables immediately
+os.environ["DATABASE_URL"] = TEST_DATABASE_URL
+os.environ["ASYNC_DATABASE_URL"] = TEST_ASYNC_DATABASE_URL
+os.environ["PROMETHEUS_ENABLED"] = "false"
+os.environ["CELERY_BROKER_URL"] = "memory://"
+os.environ["REDIS_HOST"] = "localhost"
+os.environ["DEBUG"] = "true"
+
+# Now we can safely import app modules
+from fastapi.testclient import TestClient
 from app.db.database import Base, get_db
 from app.core.config import settings
 
 
-# Override settings for testing - use SQLite for unit tests
-TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
+def create_test_app():
+    """Create a fresh FastAPI app instance for testing with SQLite."""
+    # Import here after env vars are set
+    from app.main import create_application
+    
+    app = create_application()
+    
+    # Override exception handlers for testing
+    from fastapi.exceptions import RequestValidationError
+    from fastapi.responses import JSONResponse
+    
+    @app.exception_handler(RequestValidationError)
+    async def validation_exception_handler(request, exc):
+        return JSONResponse(
+            status_code=422,
+            content={"detail": exc.errors(), "body": exc.body}
+        )
+    
+    return app
 
 
 @pytest.fixture(scope="session")
 def test_engine():
-    """Create test database engine."""
-    from sqlalchemy.dialects import sqlite
-    
-    # Use synchronous engine for tests with SQLite
+    """Create test database engine using SQLite."""
     engine = create_engine(
-        "sqlite:///:memory:",
+        TEST_DATABASE_URL,
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
     
-    # Create tables manually without PostgreSQL-specific types
-    from app.models import User  # Import models to register them with Base
+    # Enable foreign keys for SQLite
+    @event.listens_for(engine, "connect")
+    def set_sqlite_pragma(dbapi_connection, connection_record):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+    
+    # Create tables
+    from app.models import User, Tender, TenderDocument, TenderComment, FavoriteTender, AuditLog
     Base.metadata.create_all(bind=engine)
+    
     yield engine
+    
+    # Cleanup
     Base.metadata.drop_all(bind=engine)
+    engine.dispose()
 
 
 @pytest.fixture(scope="function")
@@ -57,18 +100,21 @@ def db_session(test_engine) -> Generator[Session, None, None]:
 @pytest.fixture(scope="function")
 def client(db_session) -> Generator[TestClient, None, None]:
     """Create test client with overridden database dependency."""
+    # Create fresh app for each test
+    test_app = create_test_app()
+    
     def override_get_db():
         try:
             yield db_session
         finally:
             pass
     
-    app.dependency_overrides[get_db] = override_get_db
+    test_app.dependency_overrides[get_db] = override_get_db
     
-    with TestClient(app) as test_client:
+    with TestClient(test_app) as test_client:
         yield test_client
     
-    app.dependency_overrides.clear()
+    test_app.dependency_overrides.clear()
 
 
 @pytest.fixture(scope="function")

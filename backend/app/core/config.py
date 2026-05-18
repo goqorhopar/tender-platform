@@ -83,6 +83,10 @@ class Settings(BaseSettings):
     
     @property
     def DATABASE_URL(self) -> str:
+        """Get database URL, allowing environment variable override."""
+        env_url = os.getenv("DATABASE_URL")
+        if env_url:
+            return env_url
         return (
             f"postgresql+psycopg2://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
             f"@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
@@ -90,6 +94,10 @@ class Settings(BaseSettings):
     
     @property
     def ASYNC_DATABASE_URL(self) -> str:
+        """Get async database URL, allowing environment variable override."""
+        env_url = os.getenv("ASYNC_DATABASE_URL")
+        if env_url:
+            return env_url
         return (
             f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
             f"@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"

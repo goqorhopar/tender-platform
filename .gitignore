@@ -1,6 +1,39 @@
 ```
-__pycache__/
+# Compiled and build artifacts
 *.pyc
+__pycache__/
 *.pyo
 *.pyd
+*.so
+*.egg-info/
+build/
+dist/
+*.egg
+
+# Dependencies
+venv/
+.venv/
+.env
+.env.local
+.env.*
+
+# Tests and coverage
+.coverage
+coverage/
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+
+# Logs and temp files
+*.log
+*.tmp
+*.swp
+
+# Editors
+.vscode/
+.idea/
+
+# OS generated files
+.DS_Store
+Thumbs.db
 ```
