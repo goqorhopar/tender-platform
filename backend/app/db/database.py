@@ -7,7 +7,7 @@ from typing import AsyncGenerator, Generator
 from sqlalchemy import create_engine
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import Session, sessionmaker, declarative_base
-from sqlalchemy.pool import QueuePool
+from sqlalchemy.pool import QueuePool, NullPool
 
 from app.core.config import settings
 
@@ -39,16 +39,27 @@ SyncSessionLocal = sessionmaker(
 # ============================================================================
 # ASYNC DATABASE ENGINE
 # ============================================================================
-async_engine = create_async_engine(
-    settings.ASYNC_DATABASE_URL,
-    poolclass=QueuePool,
-    pool_size=settings.DB_POOL_SIZE,
-    max_overflow=settings.DB_MAX_OVERFLOW,
-    pool_timeout=settings.DB_POOL_TIMEOUT,
-    pool_recycle=settings.DB_POOL_RECYCLE,
-    echo=settings.DB_ECHO,
-    future=True,
-)
+# Note: asyncio engines use AsyncAdaptedQueuePool by default, cannot use QueuePool
+# SQLite doesn't support pool_size, max_overflow, pool_timeout - only for PostgreSQL
+_is_sqlite = "sqlite" in settings.ASYNC_DATABASE_URL.lower()
+
+if _is_sqlite:
+    async_engine = create_async_engine(
+        settings.ASYNC_DATABASE_URL,
+        echo=settings.DB_ECHO,
+        future=True,
+        connect_args={"check_same_thread": False},
+    )
+else:
+    async_engine = create_async_engine(
+        settings.ASYNC_DATABASE_URL,
+        pool_size=settings.DB_POOL_SIZE,
+        max_overflow=settings.DB_MAX_OVERFLOW,
+        pool_timeout=settings.DB_POOL_TIMEOUT,
+        pool_recycle=settings.DB_POOL_RECYCLE,
+        echo=settings.DB_ECHO,
+        future=True,
+    )
 
 AsyncSessionLocal = async_sessionmaker(
     bind=async_engine,

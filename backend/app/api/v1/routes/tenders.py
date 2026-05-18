@@ -34,7 +34,7 @@ async def create_tender(
     """
     tender = Tender(
         **tender_data,
-        created_by=current_user.id,
+        creator_id=current_user.id,
     )
     
     db.add(tender)
