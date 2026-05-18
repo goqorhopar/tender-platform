@@ -61,7 +61,19 @@ class Settings(BaseSettings):
     @classmethod
     def validate_secret_key(cls, v: str) -> str:
         if not v or len(v) < 32:
-            # Generate a secure random key if not provided or too short
+            # In production, require a valid SECRET_KEY
+            if os.getenv("ENVIRONMENT") == "production":
+                raise ValueError(
+                    "SECRET_KEY must be set in production environment. "
+                    "Generate one with: python -c 'import secrets; print(secrets.token_urlsafe(32))'"
+                )
+            # For development, generate a warning but allow startup
+            import warnings
+            warnings.warn(
+                "SECRET_KEY not set or too short. Using auto-generated key. "
+                "This will cause JWT tokens to become invalid on restart. "
+                "Set SECRET_KEY in your .env file for production."
+            )
             return secrets.token_urlsafe(32)
         return v
     

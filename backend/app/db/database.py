@@ -3,6 +3,7 @@ Tender Platform - Database Module
 Production-grade database configuration with connection pooling, async support, and session management.
 """
 
+import os
 from typing import AsyncGenerator, Generator
 from sqlalchemy import create_engine
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
@@ -10,6 +11,7 @@ from sqlalchemy.orm import Session, sessionmaker, declarative_base
 from sqlalchemy.pool import QueuePool
 
 from app.core.config import settings
+from app.core.logging_config import get_logger
 
 
 # ============================================================================
@@ -104,11 +106,35 @@ async def get_async_db() -> AsyncGenerator[AsyncSession, None]:
 # ============================================================================
 def init_db() -> None:
     """
-    Initialize database tables.
-    Should be called on application startup.
+    Initialize database using Alembic migrations.
+    Falls back to create_all() only for development if no migrations exist.
     """
     from app.models import User, Tender, TenderDocument  # noqa: F401
-    Base.metadata.create_all(bind=sync_engine)
+    import subprocess
+    import sys
+    
+    logger = get_logger(__name__)
+    
+    try:
+        # Run Alembic migrations
+        logger.info("Running Alembic migrations...")
+        result = subprocess.run(
+            [sys.executable, "-m", "alembic", "upgrade", "head"],
+            cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            capture_output=True,
+            text=True
+        )
+        if result.returncode == 0:
+            logger.info("Database migrations completed successfully")
+        else:
+            logger.warning(f"Migration output: {result.stdout}")
+            logger.error(f"Migration errors: {result.stderr}")
+            # Fall back to create_all for development
+            Base.metadata.create_all(bind=sync_engine)
+            logger.info("Fallback: Created tables directly")
+    except Exception as e:
+        logger.warning(f"Alembic migration failed: {e}. Falling back to create_all()")
+        Base.metadata.create_all(bind=sync_engine)
 
 
 async def init_db_async() -> None:
