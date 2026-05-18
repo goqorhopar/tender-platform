@@ -6,6 +6,7 @@ python-multipart==0.0.6
 # Database
 sqlalchemy==2.0.25
 psycopg2-binary==2.9.9
+asyncpg==0.29.0
 alembic==1.13.1
 
 # Authentication & Security
@@ -41,9 +42,12 @@ python-dateutil==2.8.2
 pytz==2024.1
 tenacity==8.2.3
 structlog==24.1.0
+python-json-logger==2.0.7
 
 # Monitoring & Health
 prometheus-client==0.19.0
+prometheus-fastapi-instrumentator==6.1.0
+slowapi==0.1.8
 
 # Testing
 pytest==7.4.4
