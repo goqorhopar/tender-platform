@@ -1,68 +1,50 @@
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-
-# Virtual Environment
-venv/
-env/
-ENV/
-
+```
 # Environment variables
 .env
 .env.local
+.env.*
+
+# Dependencies
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg-info/
+.eggs/
+
+# Build and distribution artifacts
+build/
+dist/
+*.egg
+*.whl
+*.zip
+*.tar.gz
+
+# Docker
+.dockerignore
 
 # Logs
-logs/
 *.log
 
-# Database
-*.db
-*.sqlite3
+# OS generated files
+.DS_Store
+Thumbs.db
 
-# IDE
+# Editor files
 .vscode/
 .idea/
 *.swp
 *.swo
-*~
+*.tmp
 
-# OS
-.DS_Store
-Thumbs.db
-
-# Docker
-docker-compose.override.yml
-
-# Alembic
-alembic/versions/*.pyc
-
-# Frontend
-frontend/node_modules/
-frontend/build/
-frontend/dist/
-frontend/.env
-
-# Celery
-celerybeat-schedule
-celerybeat.pid
-
-# Redis
-dump.rdb
+# Testing
+.coverage
+coverage/
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+```
