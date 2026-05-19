@@ -231,19 +231,21 @@ async def readiness_check() -> dict:
     Verifies all dependencies are available.
     """
     from app.db.database import sync_engine
+    from sqlalchemy import text
     
     checks = {
         "database": False,
         "redis": False,
     }
     
+    logger = get_logger("health")
+    
     # Check database
     try:
         with sync_engine.connect() as conn:
-            conn.execute("SELECT 1")
+            conn.execute(text("SELECT 1"))
         checks["database"] = True
     except Exception as e:
-        logger = get_logger("health")
         logger.error(f"Database health check failed: {e}")
     
     # Check Redis
@@ -258,7 +260,6 @@ async def readiness_check() -> dict:
         r.ping()
         checks["redis"] = True
     except Exception as e:
-        logger = get_logger("health")
         logger.error(f"Redis health check failed: {e}")
     
     all_healthy = all(checks.values())
