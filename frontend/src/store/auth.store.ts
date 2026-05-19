@@ -16,7 +16,7 @@ interface User {
 interface AuthState {
   user: User | null;
   accessToken: string | null;
-  refreshToken: string | null;
+  refreshTokenValue: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
@@ -25,7 +25,7 @@ interface AuthState {
   login: (credentials: LoginRequest) => Promise<void>;
   register: (data: RegisterRequest) => Promise<void>;
   logout: () => void;
-  refreshToken: () => Promise<void>;
+  refreshAccessToken: () => Promise<void>;
   clearError: () => void;
 }
 
@@ -34,7 +34,7 @@ export const useAuthStore = create<AuthState>()(
     (set, get) => ({
       user: null,
       accessToken: null,
-      refreshToken: null,
+      refreshTokenValue: null,
       isAuthenticated: false,
       isLoading: false,
       error: null,
@@ -46,7 +46,7 @@ export const useAuthStore = create<AuthState>()(
           set({
             user: response.user,
             accessToken: response.access_token,
-            refreshToken: response.refresh_token,
+            refreshTokenValue: response.refresh_token,
             isAuthenticated: true,
             isLoading: false,
           });
@@ -66,7 +66,7 @@ export const useAuthStore = create<AuthState>()(
           set({
             user: response.user,
             accessToken: response.access_token,
-            refreshToken: response.refresh_token,
+            refreshTokenValue: response.refresh_token,
             isAuthenticated: true,
             isLoading: false,
           });
@@ -84,14 +84,14 @@ export const useAuthStore = create<AuthState>()(
         set({
           user: null,
           accessToken: null,
-          refreshToken: null,
+          refreshTokenValue: null,
           isAuthenticated: false,
           error: null,
         });
       },
 
-      refreshToken: async () => {
-        const { refreshToken: currentRefreshToken } = get();
+      refreshAccessToken: async () => {
+        const { refreshTokenValue: currentRefreshToken } = get();
         if (!currentRefreshToken) {
           get().logout();
           return;
@@ -101,7 +101,7 @@ export const useAuthStore = create<AuthState>()(
           const response = await authService.refreshToken(currentRefreshToken);
           set({
             accessToken: response.access_token,
-            refreshToken: response.refresh_token,
+            refreshTokenValue: response.refresh_token,
           });
         } catch (error) {
           get().logout();
@@ -116,7 +116,7 @@ export const useAuthStore = create<AuthState>()(
       partialize: (state) => ({
         user: state.user,
         accessToken: state.accessToken,
-        refreshToken: state.refreshToken,
+        refreshTokenValue: state.refreshTokenValue,
         isAuthenticated: state.isAuthenticated,
       }),
     }

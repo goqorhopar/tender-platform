@@ -3,7 +3,7 @@ Tender Platform - Authentication Routes
 Production-grade authentication endpoints with JWT tokens, refresh logic, and security best practices.
 """
 
-from datetime import timedelta
+from datetime import timedelta, datetime
 from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordRequestForm
@@ -276,37 +276,6 @@ async def register_user(
 
 
 # ============================================================================
-# DEPENDENCIES FOR AUTHENTICATION
-# ============================================================================
-async def get_current_active_user(
-    current_user: User = Depends(get_current_user),
-) -> User:
-    """
-    Get current active user.
-    """
-    if not current_user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Inactive user",
-        )
-    return current_user
-
-
-async def get_current_superuser(
-    current_user: User = Depends(get_current_active_user),
-) -> User:
-    """
-    Get current superuser.
-    """
-    if not current_user.is_superuser:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="The user doesn't have enough privileges",
-        )
-    return current_user
-
-
-# ============================================================================
 # PASSWORD MANAGEMENT
 # ============================================================================
 @router.post("/password/change")
@@ -363,6 +332,10 @@ async def request_password_reset(
         reset_token = generate_secure_token(32)
         # Store token in database or cache (simplified here)
         # In production, store with expiration in Redis
+        # Store token hash instead of plain token
+        from app.core.security import get_password_hash
+        token_hash = get_password_hash(reset_token)
+        # TODO: Store token_hash in user record or Redis with expiration
         # send_password_reset_email.delay(user.id, reset_token)
         logger.info(f"Password reset requested for: {user.email}")
     

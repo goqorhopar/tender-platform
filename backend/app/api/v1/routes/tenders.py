@@ -5,13 +5,21 @@ CRUD operations and search functionality for tenders.
 
 from typing import Any, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 from uuid import UUID
 from datetime import datetime
 
 from app.db.database import get_db
 from app.models import User, Tender, TenderStatus, TenderType
 from app.api.v1.routes.auth import get_current_active_user
+from app.schemas.tender import (
+    TenderCreate,
+    TenderUpdate,
+    TenderResponse,
+    TenderListResponse,
+    TenderListItem,
+    TenderSearchRequest,
+)
 from app.core.logging_config import get_logger
 
 
@@ -22,10 +30,10 @@ logger = get_logger(__name__)
 # ============================================================================
 # TENDER ENDPOINTS
 # ============================================================================
-@router.post("", response_model=dict)
+@router.post("", response_model=TenderResponse)
 async def create_tender(
     request: Request,
-    tender_data: dict,  # Would use proper schema in production
+    tender_data: TenderCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ) -> Any:
@@ -33,7 +41,22 @@ async def create_tender(
     Create a new tender.
     """
     tender = Tender(
-        **tender_data,
+        title=tender_data.title,
+        description=tender_data.description,
+        tender_number=tender_data.tender_number,
+        type=tender_data.type,
+        status=tender_data.status,
+        category=tender_data.category,
+        initial_price=tender_data.initial_price,
+        currency=tender_data.currency,
+        customer_name=tender_data.customer_name,
+        customer_inn=tender_data.customer_inn,
+        customer_region=tender_data.customer_region,
+        submission_deadline=tender_data.submission_deadline,
+        publication_date=tender_data.publication_date,
+        okpd2_codes=tender_data.okpd2_codes or [],
+        documents_url=tender_data.documents_url,
+        technical_spec_url=tender_data.technical_spec_url,
         creator_id=current_user.id,
     )
     
@@ -43,10 +66,10 @@ async def create_tender(
     
     logger.info(f"Tender created: {tender.tender_number} by {current_user.email}")
     
-    return {"id": str(tender.id), "message": "Tender created successfully"}
+    return tender
 
 
-@router.get("", response_model=dict)
+@router.get("", response_model=TenderListResponse)
 async def list_tenders(
     request: Request,
     db: Session = Depends(get_db),
@@ -61,6 +84,7 @@ async def list_tenders(
 ) -> Any:
     """
     List tenders with filtering and pagination.
+    Optimized query with proper indexing.
     """
     query = db.query(Tender).filter(Tender.is_deleted == False)
     
@@ -80,29 +104,41 @@ async def list_tenders(
     if max_price is not None:
         query = query.filter(Tender.initial_price <= max_price)
     
+    # Get total count before pagination
     total = query.count()
-    tenders = query.offset(skip).limit(limit).all()
     
-    return {
-        "items": [
-            {
-                "id": str(t.id),
-                "title": t.title,
-                "tender_number": t.tender_number,
-                "status": t.status.value,
-                "initial_price": t.initial_price,
-                "currency": t.currency,
-                "submission_deadline": t.submission_deadline.isoformat() if t.submission_deadline else None,
-            }
-            for t in tenders
-        ],
-        "total": total,
-        "page": (skip // limit) + 1,
-        "page_size": limit,
-    }
+    # Apply pagination with eager loading to avoid N+1 queries
+    tenders = query.options(
+        selectinload(Tender.creator)
+    ).offset(skip).limit(limit).all()
+    
+    # Convert to list items
+    items = [
+        TenderListItem(
+            id=t.id,
+            title=t.title,
+            tender_number=t.tender_number,
+            status=t.status,
+            initial_price=t.initial_price,
+            currency=t.currency,
+            submission_deadline=t.submission_deadline,
+            publication_date=t.publication_date,
+        )
+        for t in tenders
+    ]
+    
+    page = (skip // limit) + 1 if limit > 0 else 1
+    
+    return TenderListResponse(
+        items=items,
+        total=total,
+        page=page,
+        page_size=limit,
+        pages=(total + limit - 1) // limit if limit > 0 else 0,
+    )
 
 
-@router.get("/{tender_id}", response_model=dict)
+@router.get("/{tender_id}", response_model=TenderResponse)
 async def get_tender(
     request: Request,
     tender_id: UUID,
@@ -112,7 +148,10 @@ async def get_tender(
     """
     Get tender by ID.
     """
-    tender = db.query(Tender).filter(
+    tender = db.query(Tender).options(
+        selectinload(Tender.creator),
+        selectinload(Tender.assigned_to)
+    ).filter(
         Tender.id == tender_id,
         Tender.is_deleted == False
     ).first()
@@ -123,26 +162,14 @@ async def get_tender(
             detail="Tender not found",
         )
     
-    return {
-        "id": str(tender.id),
-        "title": tender.title,
-        "description": tender.description,
-        "tender_number": tender.tender_number,
-        "status": tender.status.value,
-        "type": tender.type.value,
-        "initial_price": tender.initial_price,
-        "currency": tender.currency,
-        "customer_name": tender.customer_name,
-        "publication_date": tender.publication_date.isoformat() if tender.publication_date else None,
-        "submission_deadline": tender.submission_deadline.isoformat() if tender.submission_deadline else None,
-    }
+    return tender
 
 
-@router.put("/{tender_id}", response_model=dict)
+@router.put("/{tender_id}", response_model=TenderResponse)
 async def update_tender(
     request: Request,
     tender_id: UUID,
-    tender_data: dict,
+    tender_data: TenderUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ) -> Any:
@@ -160,8 +187,9 @@ async def update_tender(
             detail="Tender not found",
         )
     
-    # Update fields
-    for key, value in tender_data.items():
+    # Update only provided fields
+    update_data = tender_data.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
         if hasattr(tender, key):
             setattr(tender, key, value)
     
@@ -171,7 +199,7 @@ async def update_tender(
     
     logger.info(f"Tender updated: {tender.tender_number} by {current_user.email}")
     
-    return {"message": "Tender updated successfully"}
+    return tender
 
 
 @router.delete("/{tender_id}")
